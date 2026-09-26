@@ -156,16 +156,15 @@ I fit the simple linear regression model [@kutner2005, Ch. 1]
 
 $$Y_i = \beta_0 + \beta_1 X_i + \varepsilon_i, \qquad i = 1, \dots, n,$$
 
-where $n =$ `r format(n, big.mark = ",")` is the number of games, $Y_i$ is Jinx's damage to champions per minute in game $i$, $X_i$ is her gold earned per minute in game $i$, and $\varepsilon_i$ is a random error with mean zero and variance $\sigma^2$, independent across games. The error represents everything else that affects damage in that game, such as the player's skill, item choices, and the opposing team. Under this model, the mean damage per minute in games with gold per minute $X_i$ is $E(Y_i) = \beta_0 + \beta_1 X_i$, and the variance around that mean is $\mathrm{Var}(Y_i) = \sigma^2$.
+where $n =$ `r format(n, big.mark = ",")` is the number of games, $Y_i$ is Jinx's damage to champions per minute in game $i$, $X_i$ is her gold earned per minute in game $i$, treated as a known constant, and $\varepsilon_i$ is a random error with mean zero and finite variance $\sigma^2$, with errors independent across games. The error represents everything else that affects damage in that game, such as the player's skill, item choices, and the opposing team. Under this model, the mean damage per minute in games with gold per minute $X_i$ is $E(Y_i) = \beta_0 + \beta_1 X_i$, and the variance around that mean is $\mathrm{Var}(Y_i) = \sigma^2$.
 
 The slope $\beta_1$ is the change in mean damage per minute for each one-unit increase in gold per minute. The intercept $\beta_0$ is the mean damage per minute when gold per minute is zero. No real game has zero gold income (the minimum in the data is `r round(min(jinx$gpm))`), so $\beta_0$ positions the line and has no practical meaning on its own.
-
 
 I chose gold as the predictor and damage as the response because gold buys items, and items increase damage. The reverse also happens, because damage leads to kills, which pay gold. The model therefore describes an association and cannot estimate the causal effect of giving a player more gold.
 
 ## Estimation and inference
 
-I estimate $\beta_0$ and $\beta_1$ by ordinary least squares (OLS), which chooses the estimates $b_0$ and $b_1$ that minimize $\sum_{i=1}^n (Y_i - \beta_0 - \beta_1 X_i)^2$. The fitted value for game $i$ is $\widehat{Y}_i = b_0 + b_1 X_i$, and the residual is $e_i = Y_i - \widehat{Y}_i$. I estimate $\sigma^2$ with $s^2 = \mathrm{MSE} = \sum_{i=1}^n e_i^2 / (n - 2)$ and call $s$ the residual standard error. The coefficient of determination $R^2 = 1 - SSE/SSTO$ is the proportion of the variation in damage per minute explained by the fitted line.
+I estimate $\beta_0$ and $\beta_1$ by ordinary least squares (OLS), where the estimates $b_0$ and $b_1$ are the values of $\beta_0$ and $\beta_1$ that minimize $Q = \sum_{i=1}^n (Y_i - \beta_0 - \beta_1 X_i)^2$. The fitted value for game $i$ is $\widehat{Y}_i = b_0 + b_1 X_i$, and the residual is $e_i = Y_i - \widehat{Y}_i$. I estimate $\sigma^2$ with $s^2 = \mathrm{MSE} = \mathrm{SSE}/(n - 2)$, where $\mathrm{SSE} = \sum_{i=1}^n e_i^2$, and call $s$ the residual standard error. The coefficient of determination $R^2 = 1 - \mathrm{SSE}/\mathrm{SSTO}$, where $\mathrm{SSTO} = \sum_{i=1}^n (Y_i - \overline{Y})^2$, is the proportion of the variation in damage per minute explained by the fitted line.
 
 I test $H_0: \beta_1 = 0$ against $H_A: \beta_1 \neq 0$ with a type I error rate of $\alpha = 0.05$, using the test statistic $t^* = b_1 / \widehat{\mathrm{se}}(b_1)$, where $\widehat{\mathrm{se}}(b_1) = s / \sqrt{\sum_{i=1}^n (X_i - \overline{X})^2}$. Under the normal error regression model and $H_0$, $t^*$ follows a $t(n-2)$ distribution, and I reject $H_0$ if $|t^*| > t_{0.975,\, n-2}$. A 95% confidence interval for $\beta_1$ is $b_1 \pm t_{0.975,\, n-2} \times \widehat{\mathrm{se}}(b_1)$.
 
@@ -180,12 +179,11 @@ Following @gelman2020 [Ch. 11], I consider the assumptions of the analysis in de
 
 Following @kutner2005 [Ch. 3], I check linearity and equal variance with a plot of residuals against fitted values, and normality with a normal quantile-quantile (Q-Q) plot. I check representativeness by refitting the model within each rank group. Independence is supported by the design: each match contributes one Jinx player, and few players appear more than once. Unequal variance leaves $b_1$ unbiased but makes its standard error approximate, while non-normality matters little with thousands of games.
 
-
 A single predictor leaves out other influences on damage, such as rank. Adding rank as a second predictor could move the slope in either direction, and modelling $\log Y_i$ could make the variance more equal. I return to these extensions in @sec-discussion.
 
 ## Software
 
-I performed the analysis in R [@R_language]. The raw JSON match files were read with the `jsonlite` package [@jsonlite], and the data were processed and plotted with the `tidyverse` [@tidyverse]. I fit the regression model with R's `lm()` function. The project report was written in Quarto [@quarto].
+I performed the analysis in R [@R_language]. The raw JSON match files were read with the `jsonlite` package, and the data were processed and plotted with the `tidyverse` [@tidyverse]. I fit the regression model with R's `lm()` function. The project report was written in Quarto.
 
 # Results {#sec-results}
 
