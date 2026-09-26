@@ -6,8 +6,9 @@
 
 This project fits a simple linear regression of damage dealt to champions per
 minute on gold earned per minute for the champion Jinx, using 2,795 ranked
-solo/duo games collected from the Riot Games API. The paper is
-`analysis/report/jinx_gold_damage.qmd`.
+solo/duo games collected from the Riot Games API. The project report source is
+`analysis/report/jinx_gold_damage.qmd` and the rendered report is
+`analysis/report/jinx_gold_damage.pdf`.
 
 ## Project structure
 
@@ -24,21 +25,28 @@ lol-scraper/
 │       ├── download_matches.py
 │       └── storage.py
 ├── data/                      Raw match JSON (not in the repository; see below)
+├── materials/                 Lecture slides and rubric (local only, not in the repository)
 └── analysis/
     ├── extract_jinx.R         Reads the raw match files and writes one row per Jinx game
     ├── output/
-    │   └── jinx_gold_damage.csv   Extracted Jinx games used by the paper
+    │   └── jinx_gold_damage.csv   Extracted Jinx games used by the project report
     └── report/
-        ├── jinx_gold_damage.qmd   The paper (Quarto)
-        └── references.bib         Bibliography
+        ├── jinx_gold_damage.qmd   The project report (Quarto source)
+        ├── jinx_gold_damage.pdf   The rendered project report
+        └── references.bib         Bibliography (BibTeX)
 ```
 
 ## Reproducing the analysis
 
-The paper only needs `analysis/output/jinx_gold_damage.csv`, which is included.
-To render it, open `lol-scraper.Rproj` in RStudio, open
-`analysis/report/jinx_gold_damage.qmd`, and click Render (requires R packages
-`tidyverse` and `knitr`, and a TeX installation such as TinyTeX).
+The project report only needs `analysis/output/jinx_gold_damage.csv`, which is included.
+To render it:
+
+1. Install the R packages `tidyverse` and `knitr`, and a TeX distribution for
+   the PDF (for example, run `tinytex::install_tinytex()` in R).
+2. Open `lol-scraper.Rproj` in RStudio, then open
+   `analysis/report/jinx_gold_damage.qmd`.
+3. Click Render. Use the editor's Source mode rather than Visual mode, which
+   can rewrite the inline R code when it saves the file.
 
 To rebuild the dataset from scratch:
 
