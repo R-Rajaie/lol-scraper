@@ -1,0 +1,22 @@
+.env
+data/
+__pycache__/
+*.pyc
+
+# R session files
+.RData
+.Rhistory
+.Rproj.user/
+
+# Quarto render byproducts
+analysis/report/*_files/
+analysis/report/*.tex
+analysis/report/*.html
+
+# Course materials (reference only, not ours to redistribute)
+analysis/report/0*_*.html
+analysis/report/*.pdf
+!analysis/report/jinx_gold_damage.pdf
+
+# Jupyter
+.ipynb_checkpoints/
