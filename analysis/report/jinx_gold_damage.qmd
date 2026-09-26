@@ -3,7 +3,7 @@ title: "Turning Gold into Damage: A Simple Linear Regression for Jinx in Ranked 
 subtitle: "MATH 261A Project 1"
 author: "Ryan Rajaie"
 thanks: "Project repository available at: https://github.com/R-Rajaie/lol-scraper"
-date: today
+date: 2026-09-25
 date-format: long
 abstract: "In League of Legends, players earn gold during a match and spend it on items that increase their character's damage. Using 2,795 ranked solo/duo games of the champion Jinx collected through the Riot Games API, I fit a simple linear regression of damage dealt to enemy champions per minute on gold earned per minute. Each additional 100 gold per minute is associated with about 315 more damage per minute, and gold income explains about 65% of the variation in damage output. Residual diagnostics show that the spread of damage grows with gold income, but the relationship is strong enough that this does not change the conclusion. The results give a simple baseline for how efficiently a typical Jinx player converts resources into damage, though they describe an association rather than a causal effect of gold."
 format: pdf
@@ -130,16 +130,16 @@ jinx |>
 
 ```{r}
 #| label: tbl-rank
-#| tbl-cap: "Summary of the cleaned Jinx games by rank group of the match. Rank groups are low (Iron to Silver), mid (Gold to Platinum), high (Emerald to Diamond), and elite (Master to Challenger). Average gold and damage per minute rise with rank, except that elite games have slightly lower damage than high games."
+#| tbl-cap: "Summary of the cleaned Jinx games by rank group of the match, with average gold per minute, damage per minute, game length and win rate. Rank groups are low (Iron to Silver), mid (Gold to Platinum), high (Emerald to Diamond), and elite (Master to Challenger). Average gold and damage per minute rise with rank, except that elite games have slightly lower damage than high games."
 # one row per rank group with counts and averages
 jinx |>
-  group_by(`Rank group` = rankBucket) |>
+  group_by(Rank = rankBucket) |>
   summarise(
     Games = n(),
-    `Mean gold/min` = round(mean(gpm)),
-    `Mean damage/min` = round(mean(dpm)),
-    `Mean length (min)` = round(mean(minutes), 1),
-    `Win rate (%)` = round(100 * mean(win), 1)  # win is TRUE/FALSE so mean = win rate
+    `Gold/min` = round(mean(gpm)),
+    `Damage/min` = round(mean(dpm)),
+    `Length (min)` = round(mean(minutes), 1),
+    `Win %` = round(100 * mean(win), 1)  # win is TRUE/FALSE so mean = win rate
   ) |>
   kable()
 ```
@@ -169,7 +169,7 @@ I estimate $\beta_0$ and $\beta_1$ by ordinary least squares (OLS), which choose
 
 I test $H_0: \beta_1 = 0$ against $H_A: \beta_1 \neq 0$ with a type I error rate of $\alpha = 0.05$, using the test statistic $t^* = b_1 / \widehat{\mathrm{se}}(b_1)$, where $\widehat{\mathrm{se}}(b_1) = s / \sqrt{\sum_{i=1}^n (X_i - \overline{X})^2}$. Under the normal error regression model and $H_0$, $t^*$ follows a $t(n-2)$ distribution, and I reject $H_0$ if $|t^*| > t_{0.975,\, n-2}$. A 95% confidence interval for $\beta_1$ is $b_1 \pm t_{0.975,\, n-2} \times \widehat{\mathrm{se}}(b_1)$.
 
-Following @gelman2020 (Ch. 11), I consider the assumptions of the analysis in decreasing order of importance:
+Following @gelman2020 [Ch. 11], I consider the assumptions of the analysis in decreasing order of importance:
 
 1.  **Validity:** the variables measure what the question is about. Damage to champions counts all damage dealt, not only damage that decided a fight.
 2.  **Representativeness:** the sample resembles all ranked Jinx games. Higher ranks are over-sampled, which matters only if the relationship differs by rank.
@@ -233,16 +233,16 @@ ggplot(jinx, aes(x = gpm, y = dpm)) +
 # build the coefficient table by hand instead of printing raw summary() output
 tibble(
   Term = c("Intercept ($b_0$)", "Gold per minute ($b_1$)"),
-  Estimate = b,
+  Estimate = c(sprintf("%.1f", b[1]), sprintf("%.3f", b[2])),  # 1 decimal for the intercept, 3 for the slope
   `Std. error` = fit_sum$coefficients[, "Std. Error"],
   `95% CI` = sprintf("(%.2f, %.2f)", ci[, 1], ci[, 2])
 ) |>
-  kable(digits = 3, escape = FALSE)  # escape = FALSE so the $b_0$ math renders
+  kable(digits = 3, escape = FALSE, align = "lrrl")  # escape = FALSE so the $b_0$ math renders
 ```
 
 The estimated slope is $b_1 =$ `r round(b[2], 3)` (@tbl-coef). For each additional gold earned per minute, the expected damage to champions per minute increases by about `r round(b[2], 2)`. On a more useful scale, a Jinx player who earns 100 more gold per minute, roughly one standard deviation, deals about `r round(100 * b[2])` more damage per minute on average. The estimated intercept is $b_0 =$ `r round(b[1], 1)`. A negative damage value is impossible, which confirms that the intercept only positions the line and should not be interpreted directly.
 
-The $t$-statistic for $H_0: \beta_1 = 0$ is $t^* =$ `r round(fit_sum$coefficients[2, "t value"], 1)` with `r fit_sum$df[2]` degrees of freedom, giving a $p$-value below $10^{-15}$. Because $|t^*|$ is far above the critical value $t_{0.975,\, n-2} =$ `r round(qt(0.975, fit_sum$df[2]), 2)`, and the $p$-value is far below $\alpha = 0.05$, I reject the null hypothesis: gold and damage per minute are linearly associated. The 95% confidence interval for $\beta_1$ is (`r round(ci[2, 1], 2)`, `r round(ci[2, 2], 2)`). If the sampling and analysis were repeated many times, 95% of intervals built this way would contain the true slope; the interval therefore gives a range of plausible values for the increase in mean damage per minute for each extra gold per minute. The coefficient of determination is $R^2 =$ `r round(fit_sum$r.squared, 3)`, so gold per minute accounts for about `r round(100 * fit_sum$r.squared)`% of the variation in damage per minute. The residual standard error is $s =$ `r round(fit_sum$sigma)` damage per minute, so a typical game is about `r round(fit_sum$sigma)` damage per minute above or below the line.
+The $t$-statistic for $H_0: \beta_1 = 0$ is $t^* =$ `r round(fit_sum$coefficients[2, "t value"], 1)` with `r format(fit_sum$df[2], big.mark = ",")` degrees of freedom, giving a $p$-value below $10^{-15}$. Because $|t^*|$ is far above the critical value $t_{0.975,\, n-2} =$ `r round(qt(0.975, fit_sum$df[2]), 2)`, and the $p$-value is far below $\alpha = 0.05$, I reject the null hypothesis: gold and damage per minute are linearly associated. The 95% confidence interval for $\beta_1$ is (`r round(ci[2, 1], 2)`, `r round(ci[2, 2], 2)`). If the sampling and analysis were repeated many times, 95% of intervals built this way would contain the true slope; the interval therefore gives a range of plausible values for the increase in mean damage per minute for each extra gold per minute. The coefficient of determination is $R^2 =$ `r round(fit_sum$r.squared, 3)`, so gold per minute accounts for about `r round(100 * fit_sum$r.squared)`% of the variation in damage per minute. The residual standard error is $s =$ `r round(fit_sum$sigma)` damage per minute, so a typical game is about `r round(fit_sum$sigma)` damage per minute above or below the line.
 
 ```{r}
 #| label: fig-resid
