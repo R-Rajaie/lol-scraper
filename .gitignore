@@ -12,11 +12,10 @@ __pycache__/
 analysis/report/*_files/
 analysis/report/*.tex
 analysis/report/*.html
+analysis/report/*.rmarkdown
 
-# Course materials (reference only, not ours to redistribute)
-analysis/report/0*_*.html
-analysis/report/*.pdf
-!analysis/report/jinx_gold_damage.pdf
+# Course materials (lecture slides, rubric; reference only, not ours to redistribute)
+materials/
 
 # Jupyter
 .ipynb_checkpoints/

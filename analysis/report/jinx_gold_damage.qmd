@@ -1,14 +1,15 @@
 ---
 title: "Turning Gold into Damage: A Simple Linear Regression for Jinx in Ranked League of Legends"
-subtitle: "MATH 261A Paper 1"
-author: "Your Name"
-thanks: "Project repository available at: TODO-add-repository-URL."
+subtitle: "MATH 261A Project 1"
+author: "Ryan Rajaie"
+thanks: "Project repository available at: https://github.com/R-Rajaie/lol-scraper"
 date: today
 date-format: long
 abstract: "In League of Legends, players earn gold during a match and spend it on items that increase their character's damage. Using 2,795 ranked solo/duo games of the champion Jinx collected through the Riot Games API, I fit a simple linear regression of damage dealt to enemy champions per minute on gold earned per minute. Each additional 100 gold per minute is associated with about 315 more damage per minute, and gold income explains about 65% of the variation in damage output. Residual diagnostics show that the spread of damage grows with gold income, but the relationship is strong enough that this does not change the conclusion. The results give a simple baseline for how efficiently a typical Jinx player converts resources into damage, though they describe an association rather than a causal effect of gold."
 format: pdf
 bibliography: references.bib
 number-sections: true
+fig-pos: "H"
 execute:
   echo: false
   warning: false
@@ -17,51 +18,61 @@ execute:
 
 ```{r}
 #| include: false
-# load libraries
+# load libraries: tidyverse for data wrangling + plots, knitr for tables
 library(tidyverse)
 library(knitr)
 
-# Jinx player-games extracted from the raw match files by analysis/extract_jinx.R
+# one row per jinx game, made by analysis/extract_jinx.R from the raw match files
 raw <- read.csv("../output/jinx_gold_damage.csv")
 ```
 
 ```{r}
 #| include: false
-# Cleaning. Each step is counted so the Data section can report it.
+# cleaning. we flag each type of bad row first so the data section can
+# report how many got dropped for each reason
 n_raw <- nrow(raw)
-n_other_queue <- sum(raw$queueId != 420)
+n_other_queue <- sum(raw$queueId != 420)  # 420 = ranked solo/duo
+
+# remakes: early-cancelled games or anything under 5 min (300 sec)
 is_remake <- raw$earlySurrender | raw$gameDuration < 300
+# off-role: jinx played somewhere other than bot lane
 is_offrole <- !(raw$teamPosition %in% "BOTTOM")
+# invalid: missing or negative gold/damage/length (just a safety check)
 is_invalid <- !is.finite(raw$goldEarned) | !is.finite(raw$totalDamageDealtToChampions) |
   !is.finite(raw$gameDuration) | raw$goldEarned < 0 |
   raw$totalDamageDealtToChampions < 0
+
+# count each drop reason without double counting rows that hit more than one
 n_remake <- sum(is_remake)
 n_offrole <- sum(!is_remake & is_offrole)
 n_invalid <- sum(!is_remake & !is_offrole & is_invalid)
 
+# keep the good rows and build the variables we actually use
 jinx <- raw |>
   filter(queueId == 420, !is_remake, !is_offrole, !is_invalid) |>
   mutate(
-    minutes = gameDuration / 60,
-    gpm = goldEarned / minutes,
-    dpm = totalDamageDealtToChampions / minutes,
-    patchMajor = as.integer(sub("\\..*", "", gameVersion)),
+    minutes = gameDuration / 60,                      # riot gives seconds
+    gpm = goldEarned / minutes,                       # predictor: gold per min
+    dpm = totalDamageDealtToChampions / minutes,      # response: damage per min
+    patchMajor = as.integer(sub("\\..*", "", gameVersion)),  # "16.18.x" -> 16
+    # gameCreation is a unix timestamp in milliseconds
     date = as.Date(as.POSIXct(gameCreation / 1000, origin = "1970-01-01",
                               tz = "UTC")),
+    # order rank groups low -> elite so tables sort nicely
     rankBucket = factor(rankBucket, levels = c("low", "mid", "high", "elite"))
   )
 
+# quick counts that get dropped into the text
 n <- nrow(jinx)
-players <- table(jinx$playerId)
+players <- table(jinx$playerId)               # games per player
 n_players <- length(players)
-n_repeat_games <- sum(players[players > 1])
+n_repeat_games <- sum(players[players > 1])   # games from people with 2+ games
 pct_season16 <- mean(jinx$patchMajor == 16) * 100
 region_counts <- table(jinx$platformId)
-n_bucket_conflict <- sum(jinx$bucketConflict)
 
-# Main model: damage per minute regressed on gold per minute
+# the main model: damage per minute regressed on gold per minute
 lm_fit <- lm(dpm ~ gpm, data = jinx)
-b <- coef(lm_fit)
+b <- coef(lm_fit)  # b[1] = intercept, b[2] = slope
 ```
 
 # Introduction
@@ -70,7 +81,7 @@ In League of Legends [@league_of_legends], a team strategy game made by Riot Gam
 
 Most published statistical work on League of Legends studies professional matches and models team-level outcomes such as winning. For example, @novak2020 modelled performance at the 2018 World Championship using team statistics. Professional games are a small and unusual sample, and team-level models do not describe how one player's resources relate to that player's output. Ranked solo/duo games cover millions of ordinary players, and the Riot Games API [@riot_match_v5] makes per-player statistics from those games available. I found no simple, published estimate of how much damage a typical ranked player on a single champion produces per unit of gold.
 
-In this paper I fit a simple linear regression of Jinx's damage to champions per minute on her gold earned per minute, using `r format(n, big.mark = ",")` ranked games from three server regions and all rank tiers. I restrict the analysis to one champion so that the slope is not driven by differences between champions (for example, support champions earn little gold and deal little damage by design). The estimated slope is about `r round(b[2], 2)` damage per gold: a Jinx player earning 100 more gold per minute deals about `r round(100 * b[2])` more damage per minute on average. The relationship is strong but not perfectly linear, and the variability of damage grows with gold. The estimate gives players and analysts a baseline for judging whether a given game's damage is high or low for the gold earned.
+In this project I fit a simple linear regression of Jinx's damage to champions per minute on her gold earned per minute, using `r format(n, big.mark = ",")` ranked games from three server regions and all rank tiers. I restrict the analysis to one champion so that the slope is not driven by differences between champions (for example, support champions earn little gold and deal little damage by design). The estimated slope is about `r round(b[2], 2)` damage per gold: a Jinx player earning 100 more gold per minute deals about `r round(100 * b[2])` more damage per minute on average. The relationship is strong but not perfectly linear, and the variability of damage grows with gold. The estimate gives players and analysts a baseline for judging whether a given game's damage is high or low for the gold earned.
 
 @sec-data introduces the data and the cleaning steps. @sec-methods describes the model, its assumptions, and how I checked them. @sec-results presents the fitted model and diagnostics, and @sec-discussion discusses what the results mean, their limitations, and possible extensions.
 
@@ -80,22 +91,22 @@ In this paper I fit a simple linear regression of Jinx's damage to champions per
 
 The data come from the Riot Games Match-V5 API [@riot_match_v5], which returns a detailed record of each completed match, including end-of-game statistics for all ten participants. Riot provides this data to registered developers under its API policies [@riot_api_policies]. I collected matches with a Python script in the project repository. The script samples ranked players from Riot's league ladders in three server regions (North America, Europe West, and Korea) and four rank groups: low (Iron to Silver), mid (Gold to Platinum), high (Emerald to Diamond), and elite (Master to Challenger). Within each group, players are drawn at random across all divisions. For each sampled player, the script downloads their 20 most recent ranked solo/duo matches. In total, `r format(21860, big.mark = ",")` matches were collected.
 
-Because matchmaking pairs players of similar skill, I assign each match the rank group of the sampled player it was downloaded for. This label describes the approximate skill level of the whole match, not a verified rank for the Jinx player. In the few matches that contain more than one sampled player, I use the most common of their rank groups; the sampled players disagreed in only `r n_bucket_conflict` of the final games. Players can have long gaps in their play, so the games span `r format(min(jinx$date), "%B %Y")` to `r format(max(jinx$date), "%B %Y")`. However, `r round(pct_season16)`% of the games were played on patches from the 2026 season (version 16), so most of the data reflect a similar version of the game.
+Because matchmaking pairs players of similar skill, I label each match with the rank group of the sampled player it was downloaded for, which approximates the skill level of the whole match. Most games (`r round(pct_season16)`%) were played on patches from the 2026 season (version 16), so the data mostly reflect one version of the game.
 
 ## Observational units and cleaning
 
 The observational unit is one Jinx player in one match. A champion can be picked by at most one player per ranked match, so each match contributes at most one row. `r if (n_other_queue == 0) "All" else paste("All but", n_other_queue, "of the")` `r format(n_raw, big.mark = ",")` matches containing Jinx are ranked solo/duo games (Riot queue 420). From these, I removed:
 
-- `r n_remake` games that ended in a "remake" (an early vote to cancel the match, usually because a player disconnected) or lasted under five minutes. Their statistics are near zero and do not reflect a played game.
-- `r n_offrole` games where Jinx was not played in the bottom lane. Jinx in another role faces different opponents and earns gold differently, and these games are too few to study separately.
+-   `r n_remake` games that ended in a "remake" (an early vote to cancel the match, usually because a player disconnected) or lasted under five minutes. Their statistics are near zero and do not reflect a played game.
+-   `r n_offrole` games where Jinx was not played in the bottom lane. Jinx in another role faces different opponents and earns gold differently, and these games are too few to study separately.
 
-`r if (n_invalid == 0) "No remaining rows had" else paste(n_invalid, "remaining rows had")` missing or negative values for the variables used`r if (n_invalid == 0) "" else ", and I removed them"`. The final dataset has `r format(n, big.mark = ",")` games from `r format(n_players, big.mark = ",")` distinct players. Most players appear once; `r sum(players > 1)` players appear more than once, contributing `r n_repeat_games` games, with at most `r max(players)` games from one player. The games come from North America (`r region_counts[["NA1"]]`), Europe West (`r region_counts[["EUW1"]]`), and Korea (`r region_counts[["KR"]]`).
+`r if (n_invalid == 0) "No remaining rows had" else paste(n_invalid, "remaining rows had")` missing or negative values for the variables used`r if (n_invalid == 0) "" else ", and I removed them"`. The final dataset has `r format(n, big.mark = ",")` games from `r format(n_players, big.mark = ",")` distinct players; only `r n_repeat_games` games come from players who appear more than once.
 
 ## Variables
 
-- **Gold per minute** (`gpm`, the predictor) is `goldEarned`, the total gold the player earned during the match, divided by the match length in minutes. Gold earned includes gold from minions, monsters, kills, assists, objectives, and passive income over time.
-- **Damage per minute** (`dpm`, the response) is `totalDamageDealtToChampions`, the total damage the player dealt to enemy champions, divided by match length in minutes. It excludes damage to minions, monsters, and structures.
-- **Match length** (`gameDuration`) is recorded by Riot in seconds.
+-   **Gold per minute** (`gpm`, the predictor) is `goldEarned`, the total gold the player earned during the match, divided by the match length in minutes. Gold earned includes gold from minions, monsters, kills, assists, objectives, and passive income over time.
+-   **Damage per minute** (`dpm`, the response) is `totalDamageDealtToChampions`, the total damage the player dealt to enemy champions, divided by match length in minutes. It excludes damage to minions, monsters, and structures.
+-   **Match length** (`gameDuration`) is recorded by Riot in seconds.
 
 I use per-minute rates instead of totals because both gold and damage accumulate over time. With totals, a long game would have high values of both variables even for a poor performance, and the regression would mostly measure game length. Both variables are recorded automatically by the game server, so measurement error from data entry is not a concern. However, `totalDamageDealtToChampions` counts damage dealt, not damage that led to kills, so it is an imperfect measure of useful output.
 
@@ -103,13 +114,14 @@ I use per-minute rates instead of totals because both gold and damage accumulate
 #| label: fig-hist
 #| fig-cap: "Distributions of gold earned per minute (left) and damage dealt to champions per minute (right) for 2,795 ranked Jinx games. Gold per minute is roughly symmetric around 480, while damage per minute is right-skewed, with a long tail of games above 1,500."
 #| fig-height: 3
+# stack gpm and dpm into one long column so we can facet them side by side
 jinx |>
   select(`Gold per minute` = gpm, `Damage to champions per minute` = dpm) |>
   pivot_longer(everything()) |>
-  mutate(name = fct_inorder(name)) |>
+  mutate(name = fct_inorder(name)) |>  # keep gold on the left, damage on the right
   ggplot(aes(x = value)) +
   geom_histogram(bins = 40, fill = "grey60", colour = "white") +
-  facet_wrap(~name, scales = "free") +
+  facet_wrap(~name, scales = "free") +  # each panel gets its own axis range
   labs(x = NULL, y = "Number of games") +
   theme_classic()
 ```
@@ -119,6 +131,7 @@ jinx |>
 ```{r}
 #| label: tbl-rank
 #| tbl-cap: "Summary of the cleaned Jinx games by rank group of the match. Rank groups are low (Iron to Silver), mid (Gold to Platinum), high (Emerald to Diamond), and elite (Master to Challenger). Average gold and damage per minute rise with rank, except that elite games have slightly lower damage than high games."
+# one row per rank group with counts and averages
 jinx |>
   group_by(`Rank group` = rankBucket) |>
   summarise(
@@ -126,14 +139,14 @@ jinx |>
     `Mean gold/min` = round(mean(gpm)),
     `Mean damage/min` = round(mean(dpm)),
     `Mean length (min)` = round(mean(minutes), 1),
-    `Win rate (%)` = round(100 * mean(win), 1)
+    `Win rate (%)` = round(100 * mean(win), 1)  # win is TRUE/FALSE so mean = win rate
   ) |>
   kable()
 ```
 
-@tbl-rank breaks the sample down by rank group. The four groups are close to evenly represented. Average gold per minute increases with rank, which is expected because stronger players collect gold more efficiently. Rank is therefore one source of variation in the predictor, which I return to in @sec-discussion.
+@tbl-rank breaks the sample down by rank group. The groups are close to evenly represented, and average gold per minute increases with rank, so rank is one source of variation in the predictor.
 
-Other data sources could address the same question. Riot's API also provides match timelines with each player's gold and damage at every minute, and third-party sites such as League of Graphs [@leagueofgraphs] publish aggregate champion statistics. I use end-of-game statistics because they are complete for every match and match the question about a player's overall game.
+Riot's API also provides minute-by-minute match timelines, and third-party sites such as League of Graphs [@leagueofgraphs] publish aggregate champion statistics. I use end-of-game statistics because they are complete for every match and match the question about a player's overall game.
 
 # Methods {#sec-methods}
 
@@ -145,9 +158,8 @@ $$Y_i = \beta_0 + \beta_1 X_i + \varepsilon_i, \qquad i = 1, \dots, n,$$
 
 where $n =$ `r format(n, big.mark = ",")` is the number of games, $Y_i$ is Jinx's damage to champions per minute in game $i$, $X_i$ is her gold earned per minute in game $i$, and $\varepsilon_i$ is a random error with mean zero and variance $\sigma^2$, independent across games. The error represents everything else that affects damage in that game, such as the player's skill, item choices, and the opposing team. Under this model, the mean damage per minute in games with gold per minute $X_i$ is $E(Y_i) = \beta_0 + \beta_1 X_i$, and the variance around that mean is $\mathrm{Var}(Y_i) = \sigma^2$.
 
-The slope $\beta_1$ is the change in mean damage per minute for each one-unit increase in gold per minute. The intercept $\beta_0$ is the mean damage per minute when gold per minute is zero. No real game has zero gold income (the minimum in the data is `r round(min(jinx$gpm))`), so $\beta_0$ positions the line and has no practical meaning on its own. The variance parameter $\sigma^2$ describes how far individual games typically fall from the mean.
+The slope $\beta_1$ is the change in mean damage per minute for each one-unit increase in gold per minute. The intercept $\beta_0$ is the mean damage per minute when gold per minute is zero. No real game has zero gold income (the minimum in the data is `r round(min(jinx$gpm))`), so $\beta_0$ positions the line and has no practical meaning on its own.
 
-Classical regression treats the $X_i$ as fixed constants. Gold per minute is observed rather than controlled, but I follow the usual practice of conditioning on the observed values, so the results describe games like those in the sample.
 
 I chose gold as the predictor and damage as the response because gold buys items, and items increase damage. The reverse also happens, because damage leads to kills, which pay gold. The model therefore describes an association and cannot estimate the causal effect of giving a player more gold.
 
@@ -157,45 +169,43 @@ I estimate $\beta_0$ and $\beta_1$ by ordinary least squares (OLS), which choose
 
 I test $H_0: \beta_1 = 0$ against $H_A: \beta_1 \neq 0$ with a type I error rate of $\alpha = 0.05$, using the test statistic $t^* = b_1 / \widehat{\mathrm{se}}(b_1)$, where $\widehat{\mathrm{se}}(b_1) = s / \sqrt{\sum_{i=1}^n (X_i - \overline{X})^2}$. Under the normal error regression model and $H_0$, $t^*$ follows a $t(n-2)$ distribution, and I reject $H_0$ if $|t^*| > t_{0.975,\, n-2}$. A 95% confidence interval for $\beta_1$ is $b_1 \pm t_{0.975,\, n-2} \times \widehat{\mathrm{se}}(b_1)$.
 
-OLS estimates are unbiased as long as the mean function is correct. By the Gauss-Markov theorem [@kutner2005, Ch. 1], if the errors are also uncorrelated with equal variances, OLS has the smallest variance among linear unbiased estimators. Following @gelman2020 (Ch. 11), I consider the assumptions of the analysis in decreasing order of importance:
+Following @gelman2020 (Ch. 11), I consider the assumptions of the analysis in decreasing order of importance:
 
-1. **Validity:** the variables measure what the research question is about. Damage to champions is a direct measure of a marksman's output, but it counts all damage dealt, not only damage that affected the result of a fight.
-2. **Representativeness:** the sample resembles the population of all ranked Jinx games, after conditioning on gold per minute. Equal numbers of players were drawn from each rank group, so higher ranks are over-represented. This matters only if the relationship differs by rank, which I check by fitting the model separately within each rank group.
-3. **Linearity:** $E(Y_i) = \beta_0 + \beta_1 X_i$.
-4. **Independence:** the errors $\varepsilon_i$ are independent across games.
-5. **Equal variance:** the errors have the same variance $\sigma^2$ at every value of $X_i$.
-6. **Normality:** the errors are normally distributed.
+1.  **Validity:** the variables measure what the question is about. Damage to champions counts all damage dealt, not only damage that decided a fight.
+2.  **Representativeness:** the sample resembles all ranked Jinx games. Higher ranks are over-sampled, which matters only if the relationship differs by rank.
+3.  **Linearity:** $E(Y_i) = \beta_0 + \beta_1 X_i$.
+4.  **Independence:** the errors $\varepsilon_i$ are independent across games.
+5.  **Equal variance:** the errors have the same variance $\sigma^2$ at every value of $X_i$.
+6.  **Normality:** the errors are normally distributed.
 
-Following @kutner2005 [Ch. 3], I check linearity and equal variance with a plot of residuals against fitted values, look for outliers using standardized residuals, and check normality with a normal quantile-quantile (Q-Q) plot. Independence is supported by the design: each match contributes one Jinx player, and nearly all players appear once, although the `r n_repeat_games` games from repeat players may share player-specific habits. Normality matters least: with thousands of games, the $t$-test is approximately valid without it.
+Following @kutner2005 [Ch. 3], I check linearity and equal variance with a plot of residuals against fitted values, and normality with a normal quantile-quantile (Q-Q) plot. I check representativeness by refitting the model within each rank group. Independence is supported by the design: each match contributes one Jinx player, and few players appear more than once. Unequal variance leaves $b_1$ unbiased but makes its standard error approximate, while non-normality matters little with thousands of games.
 
-Unequal variance is more serious. It leaves $b_1$ unbiased, but the usual $\widehat{\mathrm{se}}(b_1)$ assumes a single $\sigma^2$, so the $t$-test and confidence interval become approximate.
 
-A single predictor leaves out other influences on damage, such as rank. Because rank is related to gold income (@tbl-rank), adding it as a second predictor could move the slope in either direction, as in Simpson's paradox [@simpson1951]. Modelling $\log Y_i$ instead of $Y_i$ could make the variance more equal, but the slope would then describe percentage changes in damage. I return to these extensions in @sec-discussion.
+A single predictor leaves out other influences on damage, such as rank. Adding rank as a second predictor could move the slope in either direction, and modelling $\log Y_i$ could make the variance more equal. I return to these extensions in @sec-discussion.
 
 ## Software
 
-I performed the analysis in R [@R_language]. The raw JSON match files were read with the `jsonlite` package [@jsonlite], data were processed with the `tidyverse` [@tidyverse] and plotted with `ggplot2` [@ggplot2], and tables were made with `knitr` [@knitr]. I fit the regression model with R's `lm()` function. The paper was written in Quarto [@quarto].
+I performed the analysis in R [@R_language]. The raw JSON match files were read with the `jsonlite` package [@jsonlite], and the data were processed and plotted with the `tidyverse` [@tidyverse]. I fit the regression model with R's `lm()` function. The project report was written in Quarto [@quarto].
 
 # Results {#sec-results}
 
 ```{r}
 #| include: false
-ci <- confint(lm_fit)
-fit_sum <- summary(lm_fit)
+# pull out the stuff the results section talks about
+ci <- confint(lm_fit)       # 95% confidence intervals for b0 and b1
+fit_sum <- summary(lm_fit)  # has the t stat, r^2, residual standard error, etc
 
-e <- resid(lm_fit)
+e <- resid(lm_fit)  # residuals = observed - fitted
 
-# Standardized residuals, to flag outliers
-std_resid <- rstandard(lm_fit)
-n_outlier <- sum(abs(std_resid) > 3)
-
-# Same model fit separately within each rank group (representativeness check)
+# refit the same model inside each rank group to see if the slope changes a lot
+# (checks whether over-sampling higher ranks messes with the overall slope)
 rank_fits <- jinx |>
   group_by(rankBucket) |>
   group_modify(~ tibble(slope = coef(lm(dpm ~ gpm, data = .x))[2])) |>
   ungroup()
 
-# Residual spread in the lower, middle and upper thirds of fitted values
+# split fitted values into low/middle/high thirds and get the residual sd in
+# each one. if the sd grows across thirds, the equal variance assumption is off
 fit_terciles <- cut(fitted(lm_fit), quantile(fitted(lm_fit), 0:3 / 3),
                     include.lowest = TRUE)
 resid_sd <- tapply(e, fit_terciles, sd)
@@ -205,52 +215,57 @@ resid_sd <- tapply(e, fit_terciles, sd)
 #| label: fig-scatter
 #| fig-cap: "Damage to champions per minute against gold earned per minute for 2,795 ranked Jinx games, with the fitted least-squares line (red). Games with more gold income have higher damage output, and the points spread out more at higher gold income."
 #| fig-height: 4
+# scatter of every game with the least-squares line on top
 ggplot(jinx, aes(x = gpm, y = dpm)) +
-  geom_point(alpha = 0.2, size = 0.8) +
-  geom_smooth(method = "lm", se = FALSE, colour = "red") +
+  geom_point(alpha = 0.2, size = 0.8) +  # see-through dots so overlap shows up darker
+  geom_smooth(method = "lm", se = FALSE, colour = "red") +  # same line as lm_fit
   labs(x = "Gold earned per minute", y = "Damage to champions per minute") +
   theme_classic()
 ```
 
 @fig-scatter shows a strong positive linear relationship between gold and damage per minute; the sample correlation is `r sprintf("%.2f", cor(jinx$gpm, jinx$dpm))`. The fitted regression line is
 
-$$\hat{Y} = `r round(b[1], 1)` + `r round(b[2], 3)` X.$$
+`r sprintf("$$\\widehat{Y} = %.1f + %.3f X.$$", b[1], b[2])`
 
 ```{r}
 #| label: tbl-coef
 #| tbl-cap: "Estimated coefficients for the regression of damage to champions per minute on gold earned per minute (n = 2,795). The 95% confidence interval for the slope is far from zero."
+# build the coefficient table by hand instead of printing raw summary() output
 tibble(
   Term = c("Intercept ($b_0$)", "Gold per minute ($b_1$)"),
   Estimate = b,
   `Std. error` = fit_sum$coefficients[, "Std. Error"],
   `95% CI` = sprintf("(%.2f, %.2f)", ci[, 1], ci[, 2])
 ) |>
-  kable(digits = 3, escape = FALSE)
+  kable(digits = 3, escape = FALSE)  # escape = FALSE so the $b_0$ math renders
 ```
 
-The estimated slope is $b_1 =$ `r round(b[2], 3)` (@tbl-coef). For each additional gold earned per minute, the expected damage to champions per minute increases by about `r round(b[2], 2)`. On a more useful scale, a Jinx player who earns 100 more gold per minute, roughly one standard deviation, deals about `r round(100 * b[2])` more damage per minute on average. The estimated intercept is $b_0 =$ `r round(b[1], 1)`. A negative damage value is impossible, which confirms that the intercept only positions the line and should not be interpreted directly. At the average gold income of `r round(mean(jinx$gpm))` per minute, the model predicts `r round(b[1] + b[2] * mean(jinx$gpm))` damage per minute.
+The estimated slope is $b_1 =$ `r round(b[2], 3)` (@tbl-coef). For each additional gold earned per minute, the expected damage to champions per minute increases by about `r round(b[2], 2)`. On a more useful scale, a Jinx player who earns 100 more gold per minute, roughly one standard deviation, deals about `r round(100 * b[2])` more damage per minute on average. The estimated intercept is $b_0 =$ `r round(b[1], 1)`. A negative damage value is impossible, which confirms that the intercept only positions the line and should not be interpreted directly.
 
-The $t$-statistic for $H_0: \beta_1 = 0$ is `r round(fit_sum$coefficients[2, "t value"], 1)` with `r fit_sum$df[2]` degrees of freedom, giving a $p$-value below $10^{-15}$. Because $|t^*|$ is far above the critical value $t_{0.975,\, `r fit_sum$df[2]`} =$ `r round(qt(0.975, fit_sum$df[2]), 2)`, and the $p$-value is far below $\alpha = 0.05$, I reject the null hypothesis: gold and damage per minute are linearly associated. The 95% confidence interval for $\beta_1$ is (`r round(ci[2, 1], 2)`, `r round(ci[2, 2], 2)`). If the sampling and analysis were repeated many times, 95% of intervals built this way would contain the true slope; the interval therefore gives a range of plausible values for the increase in mean damage per minute for each extra gold per minute. The coefficient of determination is $R^2 =$ `r round(fit_sum$r.squared, 3)`, so gold per minute accounts for about `r round(100 * fit_sum$r.squared)`% of the variation in damage per minute. The residual standard error is $s =$ `r round(fit_sum$sigma)` damage per minute, so a typical game is about `r round(fit_sum$sigma)` damage per minute above or below the line.
+The $t$-statistic for $H_0: \beta_1 = 0$ is $t^* =$ `r round(fit_sum$coefficients[2, "t value"], 1)` with `r fit_sum$df[2]` degrees of freedom, giving a $p$-value below $10^{-15}$. Because $|t^*|$ is far above the critical value $t_{0.975,\, n-2} =$ `r round(qt(0.975, fit_sum$df[2]), 2)`, and the $p$-value is far below $\alpha = 0.05$, I reject the null hypothesis: gold and damage per minute are linearly associated. The 95% confidence interval for $\beta_1$ is (`r round(ci[2, 1], 2)`, `r round(ci[2, 2], 2)`). If the sampling and analysis were repeated many times, 95% of intervals built this way would contain the true slope; the interval therefore gives a range of plausible values for the increase in mean damage per minute for each extra gold per minute. The coefficient of determination is $R^2 =$ `r round(fit_sum$r.squared, 3)`, so gold per minute accounts for about `r round(100 * fit_sum$r.squared)`% of the variation in damage per minute. The residual standard error is $s =$ `r round(fit_sum$sigma)` damage per minute, so a typical game is about `r round(fit_sum$sigma)` damage per minute above or below the line.
 
 ```{r}
 #| label: fig-resid
-#| fig-cap: "Residuals against fitted values for the regression of damage per minute on gold per minute. The dashed line marks zero and the blue curve is a smoothed trend. The vertical spread of the residuals increases from left to right, showing that the error variance grows with predicted damage. The curve bends upward at both ends, most sharply for the few low-gold games whose fitted damage is below zero, showing mild curvature."
+#| fig-cap: "Residuals against fitted values for the regression of damage per minute on gold per minute. The dashed line marks zero and the blue curve is a smoothed trend. The vertical spread of the residuals increases from left to right, showing that the error variance grows with predicted damage. The curve bends slightly upward at both ends, showing mild curvature."
 #| fig-height: 3.5
+# residuals vs fitted: checks linearity (trend should hug 0) and equal variance
+# (spread should stay about the same left to right)
 tibble(fitted = fitted(lm_fit), resid = e) |>
   ggplot(aes(x = fitted, y = resid)) +
   geom_point(alpha = 0.2, size = 0.8) +
   geom_hline(yintercept = 0, linetype = "dashed") +
-  geom_smooth(method = "loess", se = FALSE, colour = "steelblue") +
+  geom_smooth(method = "loess", se = FALSE, colour = "steelblue") +  # smooth trend line
   labs(x = "Fitted damage per minute", y = "Residual (observed - fitted)") +
   theme_classic()
 ```
 
-@fig-resid checks the linearity and equal-variance assumptions. The residuals are centred near zero across the fitted range, but their spread increases. The residual standard deviation is `r round(resid_sd[1])` in the lowest third of fitted values, `r round(resid_sd[2])` in the middle third, and `r round(resid_sd[3])` in the highest third. The equal-variance assumption is therefore not met. The smoothed trend also bends upward at both ends. The bend is strongest at the low end: the line predicts negative damage for gold income below `r round(-b[1] / b[2])` per minute, which `r sum(jinx$gpm < -b[1] / b[2])` games fall under, and these games all have positive residuals. At the high end, damage rises slightly faster than the line. Apart from these ends, a straight line describes the trend well. `r n_outlier` games (`r sprintf("%.1f", 100 * n_outlier / n)`%) have standardized residuals larger than 3 in absolute value, more than the roughly 0.3% expected under normal errors. `r sum(std_resid[abs(std_resid) > 3] > 0)` of them lie above the line, meaning games with much more damage than predicted, which matches the right skew in @fig-qq.
+@fig-resid checks the linearity and equal-variance assumptions. The residuals are centred near zero across most of the fitted range, with a mild upward bend at both ends, so a straight line describes the trend well. Their spread increases, however: the residual standard deviation is `r round(resid_sd[1])` in the lowest third of fitted values, `r round(resid_sd[2])` in the middle third, and `r round(resid_sd[3])` in the highest third, so the equal-variance assumption is not met.
 
 ```{r}
 #| label: fig-qq
 #| fig-cap: "Normal Q-Q plot of the regression residuals. Points on the line would indicate normally distributed errors. The upper tail rises above the line, showing that the residuals are right-skewed: some games have much more damage than predicted, while very large shortfalls are less common."
 #| fig-height: 3.5
+# normal q-q plot: if residuals were normal the dots would sit on the red line
 tibble(resid = e) |>
   ggplot(aes(sample = resid)) +
   stat_qq(alpha = 0.3, size = 0.8) +
@@ -267,10 +282,10 @@ To check representativeness, I fit the same model separately within each rank gr
 
 This analysis asked how strongly a Jinx player's gold income is related to the damage she deals to enemy champions. In ranked solo/duo games across all skill levels, the relationship is strong and positive: 100 extra gold per minute goes with about `r round(100 * b[2])` extra damage per minute, and gold income explains about `r round(100 * fit_sum$r.squared)`% of the variation in damage. For players and coaches, the fitted line gives a simple benchmark for average output at a given gold income. A game far below the line suggests the player earned gold but did not turn it into damage, for example because of poor positioning or spending too much time away from fights. The remaining `r round(100 * (1 - fit_sum$r.squared))`% of unexplained variation, and the growing spread at high gold, show that gold alone does not determine output: two players with the same gold can deal very different amounts of damage.
 
-The analysis has several strengths. It uses a large, recent sample drawn across three regions and four rank groups. It controls for game length by using per-minute rates, and it avoids comparing different champions by focusing on one. Because at most one Jinx appears per match and few players repeat, the independence assumption is reasonable. Where the model assumptions failed, I checked whether the conclusion depended on them and found that it did not.
+The main strengths of the analysis are its large sample across three regions and four rank groups, the use of per-minute rates to control for game length, and the focus on one champion, which avoids comparing champions built for different roles.
 
-There are also weaknesses. First, the relationship runs in both directions: gold buys items that raise damage, but damage also produces kills that pay gold. The slope therefore mixes both effects and should not be read as the damage that extra gold would cause. Second, the sample of players is not a simple random sample of all Jinx games. Players were drawn from rank ladders in equal numbers per rank group, so low-ranked games, which make up most real games, are under-represented relative to the player population. The slopes are similar across rank groups, which limits the effect of this imbalance. Third, the error variance is not constant, and the relationship has mild curvature, so predictions for games with very high gold are less precise than the residual standard error suggests. Fourth, the rank label comes from the sampled player, not the Jinx player, and the data mix several game patches in which item costs and champion balance changed.
+There are also weaknesses. First, the relationship runs in both directions: gold buys items that raise damage, but damage also produces kills that pay gold. The slope therefore mixes both effects and should not be read as the damage that extra gold would cause. Second, the sample of players is not a simple random sample of all Jinx games. Players were drawn from rank ladders in equal numbers per rank group, so low-ranked games, which make up most real games, are under-represented relative to the player population. The slopes are similar across rank groups, which limits the effect of this imbalance. Third, the error variance is not constant, and the relationship has mild curvature, so predictions for games with very high gold are less precise than the residual standard error suggests. Fourth, the rank label comes from the sampled player, not the Jinx player.
 
-Several extensions could address these issues. The match timelines already downloaded for this project record gold and damage minute by minute. Using gold at 15 minutes to predict damage later in the game would reduce the feedback from damage to gold, because the predictor would be measured before most of the response. Adding rank group or patch as predictors in a multiple regression would show whether the slope differs across skill levels or game versions. A log-log model would handle the unequal variance and describe the relationship in percentage terms. Repeating the analysis for other marksmen, such as Caitlyn or Ezreal, would show whether Jinx converts gold into damage more efficiently than similar champions. Finally, weighting games by the share of players in each rank would make the results more representative of the whole ranked population.
+Several extensions could address these issues. The match timelines already downloaded for this project record gold and damage minute by minute, so gold at 15 minutes could be used to predict later damage, reducing the feedback from damage to gold. Adding rank group as a predictor in a multiple regression would show whether the slope differs across skill levels. Repeating the analysis for other marksmen would show whether Jinx converts gold into damage more efficiently than similar champions.
 
 # References
