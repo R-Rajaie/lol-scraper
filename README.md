@@ -1,8 +1,8 @@
 # Turning Gold into Damage: Jinx in Ranked League of Legends
 
-**Author:** TODO Your Name
-**Date of submission:** TODO
-**Course:** MATH 261A (Regression Theory and Methods), Paper 1
+**Author:** Ryan Rajaie
+**Date of submission:** September 25, 2026
+**Course:** MATH 261A (Regression Theory and Methods), Project 1
 
 This project fits a simple linear regression of damage dealt to champions per
 minute on gold earned per minute for the champion Jinx, using 2,795 ranked
@@ -54,7 +54,7 @@ To rebuild the dataset from scratch:
 
 ## Data license
 
-The data come from the Riot Games API and are subject to the
+The data comes from the Riot Games API and are subject to the
 [Riot Developer Portal policies](https://developer.riotgames.com/policies/general)
 and API terms of use. Raw match files are not redistributed in this
 repository. The included CSV contains only per-game statistics for Jinx
@@ -67,7 +67,4 @@ trademarks or registered trademarks of Riot Games, Inc.
 
 ## Use of external resources
 
-TODO: Describe honestly how you used LLMs and other resources. For example:
-which parts Claude (Anthropic) was used for (such as writing the data
-extraction script, drafting sections of the paper, or checking the analysis
-against the course notes), and what you wrote, checked, or changed yourself.
+Anthropic's Claude Opus 5.5 (both in-browser and through Claude Code) was used in aid of writing code, formatting and correcting report syntax, and verifying math.
