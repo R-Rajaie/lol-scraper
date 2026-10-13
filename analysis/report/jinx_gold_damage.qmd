@@ -3,7 +3,7 @@ title: "Turning Gold into Damage: A Simple Linear Regression for Jinx in Ranked 
 subtitle: "MATH 261A Project 1"
 author: "Ryan Rajaie"
 thanks: "Project repository available at: https://github.com/R-Rajaie/lol-scraper"
-date: 2026-09-25
+date: 2026-10-12
 date-format: long
 abstract: "In League of Legends, players earn gold during a match and spend it on items that increase their character's damage. Using 2,795 ranked solo/duo games of the champion Jinx collected through the Riot Games application programming interface (API), I fit a simple linear regression of damage dealt to enemy champions per minute on gold earned per minute. Each additional 100 gold per minute is associated with about 315 more damage per minute, and gold income explains about 65% of the variation in damage output. Residual diagnostics show that the spread of damage grows with gold income, but the relationship is strong enough that this does not change the conclusion. The results give a simple baseline for how efficiently a typical Jinx player converts resources into damage, though they describe an association rather than a causal effect of gold."
 format: pdf
