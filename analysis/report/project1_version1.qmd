@@ -1,0 +1,247 @@
+---
+title: "PM2.5 and Asthma Emergency Department Visits Across California Census Tracts"
+subtitle: "A Simple Linear Regression Analysis Using CalEnviroScreen 5.0"
+author: "Xinyi Xu"
+thanks: "Project repository: [https://github.com/XinyiXu0218/math261a-project1].(Haven't set up my github page yet.)"
+date: "09/25/2026" 
+abstract: "Fine particulate matter (PM2.5) can affect respiratory health, but the size of the tract-level association with severe asthma outcomes may vary across California. Using CalEnviroScreen 5.0 data for 9,073 California census tracts with complete PM2.5 and asthma measurements, I fit a simple linear regression relating annual mean PM2.5 concentration to the age-adjusted rate of asthma emergency department visits. The estimated slope was 1.60 additional asthma emergency department visits per 10,000 people for each 1 microgram per cubic meter increase in PM2.5 (95% CI: 1.39 to 1.80; p < 0.001), but the model explained only 2.5% of the tract-to-tract variation in asthma visit rates. These results show a positive statewide association, while also indicating that PM2.5 alone is not sufficient to explain geographic differences in asthma-related emergency care."
+format:
+  pdf:
+    keep-tex: false
+bibliography: references.bib
+number-sections: true
+execute:
+  warning: false
+  message: false
+---
+
+```{r}
+#| include: false
+#| warning: false
+#| message: false
+
+library(tidyverse)
+library(ggpubr)
+library(patchwork)
+library(knitr)
+
+# The course rubric asks that external raw data not be committed to GitHub.
+# This code first looks for a local copy (which can be ignored by Git), and
+# otherwise attempts to read the official California Open Data download.
+local_candidates <- c(
+  "data/calenviroscreen50_070126.csv",
+  "calenviroscreen50_070126.csv",
+  "calenviroscreen50_070126(1).csv"
+)
+
+existing_files <- local_candidates[file.exists(local_candidates)]
+
+data_url <- paste0(
+  "https://data.ca.gov/dataset/72b28c84-ceac-4886-9f71-d422470d2223/",
+  "resource/c4e277e0-cf23-4a8f-b07e-c8544c5d3d2b/download/",
+  "calenviroscreen50_070126.csv"
+)
+
+if (length(existing_files) > 0) {
+  ces <- read_csv(existing_files[1], show_col_types = FALSE)
+} else {
+  ces <- read_csv(data_url, show_col_types = FALSE)
+}
+
+analysis_dat <- ces |>
+  transmute(
+    tract = tract,
+    county = county,
+    region = region,
+    population = ACS2024Pop,
+    pm25 = pm,
+    asthma = asthma
+  ) |>
+  drop_na(pm25, asthma)
+
+lm_fit <- lm(asthma ~ pm25, data = analysis_dat)
+lm_sum <- summary(lm_fit)
+lm_ci <- confint(lm_fit)
+
+n_complete <- nrow(analysis_dat)
+n_total <- nrow(ces)
+n_missing_asthma <- sum(is.na(ces$asthma))
+n_missing_pm25 <- sum(is.na(ces$pm))
+
+b0 <- unname(coef(lm_fit)[1])
+b1 <- unname(coef(lm_fit)[2])
+se_b1 <- lm_sum$coefficients[2, 2]
+t_b1 <- lm_sum$coefficients[2, 3]
+p_b1 <- lm_sum$coefficients[2, 4]
+ci_b1 <- lm_ci[2, ]
+r2 <- lm_sum$r.squared
+cor_pm_asthma <- cor(analysis_dat$pm25, analysis_dat$asthma)
+```
+
+# Introduction
+
+Fine particulate matter, usually written as PM2.5, consists of airborne particles with diameters of 2.5 micrometers or less. Because these particles are small enough to travel deep into the respiratory system, exposure to PM2.5 is linked to adverse heart and lung outcomes. Research has also found that outdoor air pollution can worsen asthma and contribute to asthma exacerbations [@guarnieri2014; @tiotiu2020]. California's Office of Environmental Health Hazard Assessment (OEHHA) includes PM2.5 as an exposure indicator in CalEnviroScreen because of these health concerns [@oehha_pm25_2026].
+
+Asthma emergency department (ED) visits represent a severe and costly asthma outcome. CalEnviroScreen 5.0 summarizes asthma burden as an age-adjusted rate of asthma-related ED visits and provides this measure at the census-tract level. The same dataset also provides tract-level PM2.5 estimates, which makes it possible to examine whether areas with higher fine-particle concentrations also tend to have higher rates of asthma-related emergency care. This is an ecological comparison: the observational units are geographic areas rather than individual people, so an association at the tract level should not be interpreted as an individual-level causal effect.
+
+The research question for this paper is: **Across California census tracts, is annual mean PM2.5 concentration linearly associated with the age-adjusted rate of asthma emergency department visits?** To answer this question, I use a simple linear regression model with PM2.5 concentration as the explanatory variable and asthma ED visit rate as the response variable. The fitted model shows a positive association: a 1 $\mu$g/m$^3$ increase in PM2.5 is associated with about 1.60 additional asthma ED visits per 10,000 people. However, the model has an $R^2$ of only about 0.025, so PM2.5 alone explains only a small part of the geographic variation in asthma ED visit rates. @sec-data describes the dataset and variables, @sec-methods presents the regression model and assumptions, @sec-results reports the fitted model and diagnostics, and @sec-discussion discusses the interpretation and limitations.
+
+# Data {#sec-data}
+
+The analysis uses the final CalEnviroScreen 5.0 dataset released by OEHHA in July 2026 and distributed through the California Open Data Portal [@oehha_ces5_2026; @ca_open_data_2026]. CalEnviroScreen is designed to compare environmental burdens and population characteristics across California census tracts. The results file contains `r n_total` census tracts. Each row is one 2020 Census tract and includes geographic information, environmental indicators, health indicators, socioeconomic measures, and CalEnviroScreen component scores. The dataset is therefore observational rather than experimental.
+
+The explanatory variable is `pm`, renamed `pm25` in the analysis. It measures annual mean PM2.5 concentration in $\mu$g/m$^3$. For CalEnviroScreen 5.0, OEHHA combines air-monitor measurements with satellite-based estimates on a one-kilometer grid, excludes days identified as affected by wildfire smoke anywhere in the state, calculates annual averages, and then averages grid-cell estimates within census-tract boundaries [@oehha_pm25_2026]. The final 5.0 indicator uses recent multi-year air-quality data. This construction provides statewide spatial coverage, but it is still an area-level estimate and may not equal the personal exposure experienced by every resident of a tract.
+
+The response variable is `asthma`, the spatially modeled, age-adjusted rate of asthma emergency department visits per 10,000 people. OEHHA's methodology uses California emergency department and hospitalization records, models age-adjusted rates, and translates those estimates to the census-tract level [@oehha_ces5_2026]. This outcome captures serious asthma events that lead to emergency care, but it does not measure all asthma cases. Access to medical care, preventive treatment, behavior, socioeconomic conditions, and other environmental exposures can also affect ED use.
+
+The PM2.5 variable has `r n_missing_pm25` missing values in the downloaded results file, while the asthma variable has `r n_missing_asthma` missing values. CalEnviroScreen documentation explains that missing health-indicator values generally occur when data are unavailable or estimates are considered unreliable. I used complete-case analysis and removed tracts with missing values in either variable, leaving `r n_complete` census tracts. No additional transformation was applied to PM2.5 or asthma before fitting the model. More detailed future analyses could use underlying air-monitor or satellite data and more detailed health-care records, but those sources are outside the scope of this simple regression analysis.
+
+```{r tbl-summary}
+#| echo: false
+#| tbl-cap: "Summary statistics for PM2.5 concentration and asthma emergency department visit rate among the 9,073 census tracts used in the regression."
+
+summary_tab <- tibble(
+  Variable = c(
+    "PM2.5 concentration (micrograms/m^3)",
+    "Asthma ED visits per 10,000 people"
+  ),
+  N = c(sum(!is.na(analysis_dat$pm25)), sum(!is.na(analysis_dat$asthma))),
+  Mean = c(mean(analysis_dat$pm25), mean(analysis_dat$asthma)),
+  SD = c(sd(analysis_dat$pm25), sd(analysis_dat$asthma)),
+  Median = c(median(analysis_dat$pm25), median(analysis_dat$asthma)),
+  Minimum = c(min(analysis_dat$pm25), min(analysis_dat$asthma)),
+  Maximum = c(max(analysis_dat$pm25), max(analysis_dat$asthma))
+) |>
+  mutate(across(c(Mean, SD, Median, Minimum, Maximum), ~ round(.x, 2)))
+
+kable(summary_tab, align = c("l", "r", "r", "r", "r", "r", "r"))
+```
+
+@tbl-summary shows that PM2.5 concentrations in the analysis range from about 3.57 to 14.59 $\mu$g/m$^3$, with a mean of 8.92. Asthma ED visit rates show much greater relative variation, ranging from 6.44 to 233.45 visits per 10,000 people, with a mean of 38.33. The high upper tail in asthma rates is relevant when checking the normality and constant-variance assumptions of the regression model.
+
+```{r fig-pm-asthma}
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-cap: "Asthma emergency department visit rate versus annual mean PM2.5 concentration for California census tracts. The solid line is the fitted simple linear regression line and the shaded band is its 95% confidence interval for the mean response."
+#| fig-width: 7
+#| fig-height: 5
+
+ggplot(analysis_dat, aes(x = pm25, y = asthma)) +
+  geom_point(alpha = 0.18, size = 0.9) +
+  geom_smooth(method = "lm", se = TRUE, linewidth = 0.8) +
+  theme_pubr() +
+  labs(
+    x = expression("Annual mean PM2.5 (" * mu * "g/m"^3 * ")"),
+    y = "Asthma ED visits per 10,000 people",
+    title = "PM2.5 and asthma emergency department visits"
+  )
+```
+
+@fig-pm-asthma shows a positive but weak linear pattern. Census tracts with higher PM2.5 values tend to have somewhat higher asthma ED visit rates, but there is substantial vertical spread at nearly every PM2.5 level. The sample correlation is `r round(cor_pm_asthma, 3)`, which also indicates a weak positive association.
+
+# Methods {#sec-methods}
+
+I fit the simple linear regression model
+
+$$
+Y_i = \beta_0 + \beta_1 X_i + \varepsilon_i, \qquad i=1,\ldots,n,
+$$
+
+where $Y_i$ is the age-adjusted asthma ED visit rate per 10,000 people for census tract $i$, and $X_i$ is that tract's annual mean PM2.5 concentration in $\mu$g/m$^3$. The parameter $\beta_0$ is the expected asthma ED visit rate when PM2.5 equals zero, and $\beta_1$ is the expected change in the asthma ED visit rate associated with a 1 $\mu$g/m$^3$ increase in PM2.5. Because zero PM2.5 is outside the observed data range, the intercept is needed mathematically but is not substantively important here. The errors $\varepsilon_i$ represent tract-level variation in asthma ED visit rates not explained by PM2.5.
+
+The model was fit by ordinary least squares in R [@r_core_2026], with data manipulation and plotting performed using the tidyverse [@wickham2019]. No model-selection procedure was used because the research question specified PM2.5 as the single explanatory variable before the analysis. For standard simple linear regression inference, the mean relationship between $X$ and $Y$ should be approximately linear; errors should have mean zero and approximately constant variance; observations should be independent; and the error distribution should be approximately normal when using the usual small-sample $t$ procedures. I checked the model using the scatter plot, the residual-versus-fitted plot, and the normal Q-Q plot.
+
+I tested
+
+$$
+H_0:\beta_1=0 \qquad \text{versus} \qquad H_A:\beta_1\neq 0
+$$
+
+using the usual two-sided $t$ test for the slope. I also report a 95% confidence interval for $\beta_1$ and $R^2$, the proportion of observed variation in asthma ED visit rates explained by the fitted linear relationship with PM2.5. The inferential results should be interpreted cautiously. These are spatial census-tract observations rather than a random sample of independent individuals, nearby tracts may share environmental and social conditions, and the model omits many factors related to asthma and emergency-care use. For these reasons, this analysis describes an association and does not estimate a causal effect of PM2.5.
+
+# Results {#sec-results}
+
+The fitted regression equation is
+
+$$
+\widehat{\text{Asthma ED rate}}
+= `r round(b0, 2)` + `r round(b1, 2)`(\text{PM2.5}).
+$$
+
+The estimated slope is $b_1=`r round(b1, 3)`$. Thus, within this statewide census-tract dataset, a 1 $\mu$g/m$^3$ higher annual mean PM2.5 concentration is associated with an estimated `r round(b1, 2)` additional asthma ED visits per 10,000 people. The 95% confidence interval for the slope is [`r round(ci_b1[1], 2)`, `r round(ci_b1[2], 2)`]. The two-sided test of $H_0:\beta_1=0$ gives $t=`r round(t_b1, 2)`$ and $p<0.001$, providing strong evidence of a nonzero positive linear association under the assumptions of the model.
+
+```{r tbl-regression}
+#| echo: false
+#| tbl-cap: "Estimated coefficients from the simple linear regression of asthma emergency department visit rate on PM2.5 concentration."
+
+coef_mat <- coef(summary(lm_fit))
+ci_mat <- confint(lm_fit)
+
+reg_tab <- tibble(
+  Term = c("Intercept", "PM2.5 concentration"),
+  Estimate = coef_mat[, 1],
+  `Std. Error` = coef_mat[, 2],
+  `t statistic` = coef_mat[, 3],
+  `p value` = coef_mat[, 4],
+  `95% CI lower` = ci_mat[, 1],
+  `95% CI upper` = ci_mat[, 2]
+) |>
+  mutate(
+    across(c(Estimate, `Std. Error`, `t statistic`, `95% CI lower`, `95% CI upper`), ~ round(.x, 3)),
+    `p value` = if_else(`p value` < 0.001, "<0.001", sprintf("%.3f", `p value`))
+  )
+
+kable(reg_tab, align = c("l", "r", "r", "r", "r", "r", "r"))
+```
+
+Although the slope is statistically distinguishable from zero, the model's $R^2$ is only `r round(r2, 3)`, which means that PM2.5 alone explains about `r round(100 * r2, 1)`% of the observed tract-to-tract variation in asthma ED visit rates. The large number of census tracts allows a small association to be estimated precisely, but the low $R^2$ shows that PM2.5 has limited explanatory power by itself. In other words, the small p-value does not mean that PM2.5 is the main factor related to asthma emergency department use across California.
+
+```{r fig-diagnostics}
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-cap: "Regression diagnostics. Left: residuals versus fitted values, used to assess linearity and constant variance. Right: normal Q-Q plot of residuals, used to assess the normal-error assumption."
+#| fig-width: 8
+#| fig-height: 4.2
+
+plot_dat <- tibble(
+  fitted = fitted(lm_fit),
+  resid = resid(lm_fit)
+)
+
+p_resid <- ggplot(plot_dat, aes(x = fitted, y = resid)) +
+  geom_point(alpha = 0.18, size = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_smooth(method = "loess", se = FALSE, linewidth = 0.7) +
+  theme_pubr() +
+  labs(
+    x = "Fitted asthma ED visit rate",
+    y = "Residual",
+    title = "Residuals vs. fitted"
+  )
+
+p_qq <- ggplot(plot_dat, aes(sample = resid)) +
+  stat_qq(alpha = 0.25, size = 0.8) +
+  stat_qq_line(linewidth = 0.7) +
+  theme_pubr() +
+  labs(
+    x = "Theoretical quantiles",
+    y = "Sample quantiles",
+    title = "Normal Q-Q plot"
+  )
+
+p_resid + p_qq
+```
+
+The diagnostic plots in @fig-diagnostics show that the residuals are centered around zero, but the simple linear regression assumptions are not fully satisfied. The residual spread is somewhat uneven, and the Q-Q plot moves away from a straight line in the upper tail because several tracts have unusually high asthma ED visit rates. With more than 9,000 observations, the mean trend can still be estimated precisely, but the uneven variance, nonnormal upper tail, and possible spatial dependence mean that the usual model-based standard errors and p-values should be interpreted with caution. The low $R^2$ also suggests that other predictors would be needed to explain more of the variation in asthma ED visit rates.
+
+# Discussion {#sec-discussion}
+
+This analysis finds a positive association between PM2.5 concentration and asthma emergency department visit rates across California census tracts. The fitted slope indicates that a 1 $\mu$g/m$^3$ increase in annual mean PM2.5 is associated with about 1.60 additional asthma ED visits per 10,000 people. This direction is consistent with prior evidence that outdoor air pollution can worsen asthma [@guarnieri2014; @tiotiu2020]. At the same time, the fitted line explains only about 2.5% of the observed variation in asthma ED visit rates, so PM2.5 alone provides only a small part of the explanation for differences among tracts.
+
+There are several limitations to this analysis. The first is that the data are measured at the census-tract level rather than for individual people. Therefore, the results cannot show that a person with higher PM2.5 exposure is more likely to make an asthma-related ED visit. The model also includes only PM2.5, so it does not control for socioeconomic conditions, smoking, indoor air quality, health-care access, other air pollutants, or other possible confounders. In addition, PM2.5 is an estimated ambient concentration for each tract rather than a measure of each person's actual exposure. Asthma ED visit rates capture severe events and may also reflect differences in access to routine and preventive care. Finally, nearby census tracts may have similar environmental and social conditions, so the observations may not be fully independent.
+
+A next step would be to fit a multiple regression model that includes socioeconomic variables and other pollution indicators. Spatial diagnostics or a spatial regression model could also be used to account for similarities among nearby census tracts. Another possible extension would compare the PM2.5-asthma relationship across California regions or between urban and rural areas. These approaches go beyond the simple linear regression required for this project, but they could give a more complete picture of why asthma ED visit rates differ across the state.
+
+# References

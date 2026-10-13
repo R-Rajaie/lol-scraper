@@ -1,0 +1,27 @@
+PAPER 1 RUBRIC REVIEW: Xinyi Xu, "PM2.5 and Asthma ED Visits Across California Census Tracts"
+
+Criterion                 Score   Reason
+------------------------  ------  ---------------------------------------------------------
+R Cited                    2 / 2   Cited in the text and in the references
+Data Cited                 2 / 2   CalEnviroScreen 5.0 cited in the text and in the references
+Reproducible Workflow      4 / 8   The Quarto file renders the paper, but the repo is not set
+                                   up, there is no .Rproj, comments are sparse, and some
+                                   code is unused
+README                     2 / 2   All required items are present; replace the leftover
+                                   ChatGPT sentence in the LLM statement
+Title                      2 / 2   Clear and informative
+Abstract                   4 / 4   Concise; covers the method, results, and implication
+Introduction               6 / 8   No knowledge gap stated
+Data                      12 / 16  Years not given; missing tracts not described; does not
+                                   say the asthma rate is smoothed
+Methods                   12 / 16  Error distribution not stated; no reason given for not
+                                   transforming the skewed response
+Results and Discussion    13 / 16  Rounding inconsistent (1.6 vs 1.60); practical size of
+                                   the effect not discussed; diagnostics understated
+Exposition                 9 / 10  Clean writing; remove the informal "(Haven't set up...)"
+                                   footnote
+Captions                   1 / 2   Describe what is plotted, not the main takeaway
+Figures and Tables         7 / 8   Clean; minor unit inconsistency in Table 1
+References                 3 / 4   ggpubr, patchwork, knitr, and Quarto not cited
+------------------------  ------
+TOTAL                     79 / 100

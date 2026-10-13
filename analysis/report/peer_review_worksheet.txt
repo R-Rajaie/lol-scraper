@@ -1,0 +1,95 @@
+PAPER 1: PEER REVIEW WORKSHEET
+Paper reviewed: "PM2.5 and Asthma Emergency Department Visits Across California Census
+                Tracts: A Simple Linear Regression Analysis Using CalEnviroScreen 5.0"
+Author:         Xinyi Xu
+
+
+1. What is the main research question of this paper?
+
+Across California census tracts, is annual mean PM2.5 concentration linearly associated with
+the age-adjusted rate of asthma emergency department (ED) visits?
+
+
+2. Briefly describe the dataset used to explore the main research question. Is the data
+   adequately introduced and described? Are there any limitations or caveats that the
+   author should address?
+
+The paper uses CalEnviroScreen 5.0 (OEHHA, 2026), where each row is a California census
+tract. After dropping 33 tracts with missing asthma values, 9,073 remain. PM2.5 is a
+tract-level annual mean estimated from monitors and satellite data. Asthma is a spatially
+modeled, age-adjusted ED visit rate per 10,000 people.
+
+The data are described well, especially how each variable is constructed. The main
+additions would be the years each variable covers, a sentence on which tracts are missing
+(the code already loads population/county but never uses them), and a note that the
+asthma rate is smoothed, which adds measurement error and spatial correlation.
+
+
+3. Describe the regression model used to answer the main research question. Is this model
+   appropriate for the question of interest? Are there any limitations or caveats that the
+   author should address?
+
+The model is a simple linear regression of asthma ED rate on PM2.5, fit by OLS. The slope is
+1.60 visits per 10,000 per ug/m^3 (95% CI 1.39 to 1.80, p < 0.001), and R^2 = 0.025.
+
+The model fits the question, and the author is careful to frame the result as an
+association, not causation. However, the diagnostics show strong right skew and uneven
+variance, which the paper understates as "somewhat uneven." A log-transformed response or
+robust standard errors would show whether the conclusion holds, or the paper should
+explain why no transformation was used. The Methods should also state the error
+distribution, epsilon ~ N(0, sigma^2).
+
+
+4. What are the most effective components of this paper? Why?
+
+The clearest strength is the discussion of statistical significance versus explanatory
+power. The paper explains well why a large n gives a highly significant slope even though
+PM2.5 explains only 2.5% of the variation. The interpretation is careful throughout
+(ecological fallacy, intercept outside the data range), the writing is clean, and most
+results come straight from inline R in the Quarto file.
+
+
+5. Are there any sections that the author should focus on revising? Does anything seem out
+   of order or incompletely explained?
+
+  - Introduction: state the knowledge gap. What does this analysis add?
+  - Results: rounding is inconsistent ("1.6" and "1.8" vs 1.60 and 1.80) because round()
+    drops trailing zeros. Use sprintf("%.2f", ...). It would also help to put the slope
+    in practical terms. Across the observed PM2.5 range, that is about 18 more visits
+    per 10,000, against a mean of 38.
+  - Figure 1 shows the fitted line in the Data section, before the model is introduced.
+
+
+6. Review the rubric for Paper 1. Are there any requirements that have not been met? If so,
+   identify them here.
+
+  - R Cited: Met.
+  - Data Cited: Met.
+  - Reproducible Workflow: Not met yet. The GitHub repo isn't set up, no R project is
+    listed, code comments are sparse, and some variables are loaded but never used.
+  - README: Good. Both required statements are there, but the LLM section includes
+    "results should be reviewed by the author before submission," which looks like
+    leftover ChatGPT text. Replace it with a first-person statement.
+  - Title: Good.
+  - Abstract: Good.
+  - Introduction: Mostly met. It's missing the knowledge gap.
+  - Data: Mostly met. It needs the years covered, which tracts are missing, and a note
+    that the asthma rate is smoothed (see Q2).
+  - Methods: Mostly met. It needs the error distribution and a reason for not
+    transforming the response (see Q3).
+  - Results and Discussion: Mostly met. Fix the rounding and discuss how large the
+    effect is in practical terms (see Q5).
+  - Exposition: Good. Remove the "(Haven't set up my github page yet.)" footnote and fix
+    its link format.
+  - Captions: Not fully met. They describe what is plotted but not the main takeaway.
+  - Figures and Tables: Good. Minor: Table 1 writes the unit as "micrograms/m^3" while
+    the rest of the paper uses ug/m^3.
+  - References: Mostly met. ggpubr, patchwork, knitr, and Quarto are used but not cited.
+
+
+7. Do you have any other suggestions or comments for the author? Provide them here.
+
+Overall this is a strong, well-reasoned paper. The most important fixes are setting up the
+repo with an R project, citing all the R packages, and cleaning up the README's LLM
+statement. Also, the paper expects references.bib, so make sure the file in the repo isn't
+named "references (1).bib."
