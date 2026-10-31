@@ -1,7 +1,7 @@
 # Turning Gold into Damage: Jinx in Ranked League of Legends
 
 **Author:** Ryan Rajaie
-**Date of submission:** October 12, 2026
+**Date of submission:** October 30, 2026
 **Course:** MATH 261A (Regression Theory and Methods), Project 1
 
 This project fits a simple linear regression of damage dealt to champions per

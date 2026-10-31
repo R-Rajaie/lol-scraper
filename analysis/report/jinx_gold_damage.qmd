@@ -3,7 +3,7 @@ title: "Turning Gold into Damage: A Simple Linear Regression for Jinx in Ranked 
 subtitle: "MATH 261A Project 1"
 author: "Ryan Rajaie"
 thanks: "Project repository available at: https://github.com/R-Rajaie/lol-scraper"
-date: 2026-10-12
+date: 2026-10-30
 date-format: long
 abstract: "In League of Legends, players earn gold during a match and spend it on items that increase their character's damage. Using 2,795 ranked solo/duo games of the champion Jinx collected through the Riot Games application programming interface (API), I fit a simple linear regression of damage dealt to enemy champions per minute on gold earned per minute. Each additional 100 gold per minute is associated with about 315 more damage per minute, and gold income explains about 65% of the variation in damage output. Residual diagnostics show that the spread of damage grows with gold income, but the relationship is strong enough that this does not change the conclusion. The results give a simple baseline for how efficiently a typical Jinx player converts resources into damage, though they describe an association rather than a causal effect of gold."
 format: pdf
@@ -99,7 +99,7 @@ In this project I fit a simple linear regression of Jinx's damage to champions p
 
 The data come from the Riot Games Match-V5 API [@riot_match_v5], which returns a detailed record of each completed match, including end-of-game statistics for all ten participants. Riot provides this data to registered developers under its API policies [@riot_api_policies]. In ranked play, each player's account is placed on a ladder of ten tiers, from Iron (lowest) through Bronze, Silver, Gold, Platinum, Emerald, Diamond, Master, and Grandmaster to Challenger (highest). Players move up by winning and down by losing, and matchmaking places players of similar rating in the same match. In the solo/duo queue, a player can enter alone or with one friend. I collected matches with a Python script in the project repository. The script samples ranked players from Riot's league ladders in three server regions (North America, Europe West, and Korea) and four rank groups: low (Iron to Silver), mid (Gold to Platinum), high (Emerald to Diamond), and elite (Master to Challenger). Within each group, players are drawn at random across all divisions. For each sampled player, the script downloads their 20 most recent ranked solo/duo matches. In total, `r format(21860, big.mark = ",")` matches were collected. Jinx appears in `r format(n_raw, big.mark = ",")` of them, and after the cleaning steps below, `r format(n, big.mark = ",")` games remain for the analysis. The sampled player is usually not the Jinx player: a sampled player's match history is only used to find matches, and any match that contains Jinx is kept, whoever played her.
 
-Because matchmaking pairs players of similar skill, I label each match with the rank group of the sampled player it was downloaded for, which approximates the skill level of the whole match. Most games (`r round(pct_season16)`%) were played on patches from the 2026 season (version 16), so the data mostly reflect one version of the game.
+Because matchmaking pairs players of similar skill, I label each match with the rank group of the sampled player it was downloaded for, which approximates the skill level of the whole match. Ranked players are not spread evenly across these groups: most accounts are in the lower and middle tiers, and Master and above holds only a small fraction of players. Because the script samples the same number of players from each rank group, games from higher ranks, especially the elite group, are over-represented in the sample relative to the player population. @sec-results checks whether this changes the estimated slope. Most games (`r round(pct_season16)`%) were played on patches from the 2026 season (version 16), so the data mostly reflect one version of the game.
 
 ## Observational units and cleaning
 
@@ -178,14 +178,14 @@ I test $H_0: \beta_1 = 0$ against $H_A: \beta_1 \neq 0$ with a type I error rate
 
 Following @gelman2020 [Ch. 11], I consider the assumptions of the analysis in decreasing order of importance:
 
-1.  **Validity:** the variables measure what the question is about. Damage to champions counts all damage dealt, not only damage that decided a fight.
-2.  **Representativeness:** the sample resembles all ranked Jinx games. Higher ranks are over-sampled, which matters only if the relationship differs by rank.
-3.  **Linearity:** $E(Y_i) = \beta_0 + \beta_1 X_i$.
-4.  **Independence:** the errors $\varepsilon_i$ are independent across games.
-5.  **Equal variance:** the errors have the same variance $\sigma^2$ at every value of $X_i$.
-6.  **Normality:** the errors are normally distributed.
+1.  **Validity:** the variables measure what the question is about. Damage to champions counts all damage dealt, not only damage that decided a fight. This is needed for the slope to answer the research question at all.
+2.  **Representativeness:** the sample resembles all ranked Jinx games. This is needed to generalize the estimate beyond the sampled games. Higher ranks are over-sampled (@sec-data), which matters only if the relationship differs by rank.
+3.  **Linearity:** $E(Y_i) = \beta_0 + \beta_1 X_i$. This is needed for $b_1$ to describe how mean damage changes with gold; if the true trend is curved, a single slope summarizes it poorly.
+4.  **Independence:** the errors $\varepsilon_i$ are independent across games. This is needed for the standard error of $b_1$, and therefore the test and confidence interval, to be correct.
+5.  **Equal variance:** the errors have the same variance $\sigma^2$ at every value of $X_i$. This is also needed for the usual standard error to be correct; without it, $b_1$ is still unbiased.
+6.  **Normality:** the errors are normally distributed. This is needed for $t^*$ to follow an exact $t(n-2)$ distribution. With thousands of games, the central limit theorem makes the test approximately valid even without it.
 
-Following @kutner2005 [Ch. 3], I check linearity and equal variance with a plot of residuals against fitted values, and normality with a normal quantile-quantile (Q-Q) plot. I check representativeness by refitting the model within each rank group. Independence is supported by the design: each match contributes one Jinx player, and few players appear more than once. Unequal variance leaves $b_1$ unbiased but makes its standard error approximate, while non-normality matters little with thousands of games.
+Following @kutner2005 [Ch. 3], I check linearity and equal variance with a plot of residuals against fitted values, and normality with a normal quantile-quantile (Q-Q) plot. I check representativeness by refitting the model within each rank group. Independence is mostly supported by the design, since each match contributes one Jinx player. However, `r n_repeat_games` games come from players who appear more than once, and two games by the same player are likely to share that player's skill and habits, which technically violates independence. To check whether this matters, I refit the model using only each player's earliest game.
 
 A single predictor leaves out other influences on damage, such as rank. Adding rank as a second predictor could move the slope in either direction, and modelling $\log Y_i$ could make the variance more equal. I return to these extensions in @sec-discussion.
 
@@ -209,6 +209,13 @@ rank_fits <- jinx |>
   group_by(rankBucket) |>
   group_modify(~ tibble(slope = coef(lm(dpm ~ gpm, data = .x))[2])) |>
   ungroup()
+
+# refit with one game per player (their earliest) to check that players who
+# show up more than once aren't driving the slope (independence check)
+one_per_player <- jinx |>
+  arrange(gameCreation) |>
+  distinct(playerId, .keep_all = TRUE)
+slope_one <- coef(lm(dpm ~ gpm, data = one_per_player))[2]
 
 # split fitted values into low/middle/high thirds and get the residual sd in
 # each one. if the sd grows across thirds, the equal variance assumption is off
@@ -282,7 +289,7 @@ tibble(resid = e) |>
 
 @fig-qq shows that the residuals are right-skewed, so the normality assumption is also not met. With `r format(n, big.mark = ",")` observations, the sampling distribution of $b_1$ is still close to normal by the central limit theorem, so this departure has little effect on the test. The unequal variance matters more, because the reported standard error assumes a constant $\sigma^2$ and is therefore only approximate. It would have to be more than `r floor(fit_sum$coefficients[2, "t value"] / qt(0.975, fit_sum$df[2]))` times too small for the slope to stop being significant, so the conclusion that gold and damage are positively associated does not depend on this assumption.
 
-To check representativeness, I fit the same model separately within each rank group. The slopes range from `r sprintf("%.2f", min(rank_fits$slope))` (`r rank_fits$rankBucket[which.min(rank_fits$slope)]`) to `r sprintf("%.2f", max(rank_fits$slope))` (`r rank_fits$rankBucket[which.max(rank_fits$slope)]`), all close to the pooled estimate, so over-representing higher ranks has little effect on the overall slope.
+To check representativeness, I fit the same model separately within each rank group. The slopes range from `r sprintf("%.2f", min(rank_fits$slope))` (`r rank_fits$rankBucket[which.min(rank_fits$slope)]`) to `r sprintf("%.2f", max(rank_fits$slope))` (`r rank_fits$rankBucket[which.max(rank_fits$slope)]`), all close to the pooled estimate, so over-representing higher ranks has little effect on the overall slope. To check independence, I refit the model using only each player's earliest game (`r format(nrow(one_per_player), big.mark = ",")` games). The slope is `r sprintf("%.2f", slope_one)`, nearly the same as the full-sample estimate of `r sprintf("%.2f", b[2])`, so the players who appear more than once do not change the conclusions.
 
 # Discussion {#sec-discussion}
 
